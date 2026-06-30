@@ -21,35 +21,17 @@ jobs:
       - name: Install cargo-component
         run: cargo install cargo-component --locked
 
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: '1.23.2'
-          cache: false
-
       - name: Check formatting
         run: cargo fmt -- --check
 
       - name: Build extension component
         run: cargo component build --release --target wasm32-wasip1
 
-      - name: Build patched ctags-lsp for Windows
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -L -o /tmp/ctags-lsp.zip https://github.com/netmute/ctags-lsp/archive/refs/tags/v0.11.0.zip
-          unzip -q /tmp/ctags-lsp.zip -d /tmp
-          cd /tmp/ctags-lsp-0.11.0
-          patch -p1 < "$GITHUB_WORKSPACE/.github/patches/ctags-lsp-windows-file-uri.patch"
-          gofmt -w main.go
-          mkdir -p "$GITHUB_WORKSPACE/dist/ctags/server"
-          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "$GITHUB_WORKSPACE/dist/ctags/server/ctags-lsp.exe" .
-
       - name: Package local extension
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist/ctags
+          mkdir -p dist/ctags/server
           wasm_file=$(find target/wasm32-wasip1/release -maxdepth 1 -name 'zed_ctags*.wasm' -print -quit)
           if [[ -z "$wasm_file" ]]; then
             echo "Could not find built zed_ctags wasm component" >&2
@@ -58,6 +40,7 @@ jobs:
           fi
           cp extension.toml dist/ctags/extension.toml
           cp "$wasm_file" dist/ctags/extension.wasm
+          cp server/ctags-lsp.exe dist/ctags/server/ctags-lsp.exe
           cat > dist/ctags/install.ps1 <<'SCRIPT'
           $ErrorActionPreference = "Stop"
           $installedTarget = Join-Path $env:LOCALAPPDATA "Zed\extensions\installed\ctags"
