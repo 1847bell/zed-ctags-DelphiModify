@@ -141,6 +141,33 @@
 
 ---
 
+## 四点五、CPU / 内存占用的取舍说明
+
+本服务端在启动索引阶段和 GC 行为上有意做了一些取舍，遇到 CPU 占用偏高时按下面的说明判断是否正常、如何调：
+
+### 正常的 CPU 高峰（不需要处理）
+
+- **首次打开工作区**（或 `.ctags-lsp\index` 不存在时）：服务端会启动最多 `--jobs`（默认 **8**）个 ctags 进程并行扫描全部源文件，期间 CPU 多核占用接近满载是预期行为。扫描完成后回落到接近 0。HIS 这类几千文件的工程通常几秒到几十秒内完成。
+- **保存单个文件**：只重扫该文件，CPU 波动很小。
+
+### 有意的 GC 调优（省内存、多花一点 CPU）
+
+服务端启动时设置了 `debug.SetGCPercent(40)` 和 `debug.SetMemoryLimit(512MiB)`（见 `main.go` 的 `main()`）：
+
+- `SetGCPercent(40)`：堆增长到原来的 1.4 倍就触发 GC（Go 默认 2 倍）。**GC 更频繁 → 后台 CPU 略高，常驻内存明显更低**。这是为了把内存从最初的 ~1 GB 压下来，属于"用 CPU 换内存"的主动选择。
+- `SetMemoryLimit(512MiB)`：软上限，堆接近 512 MiB 时 GC 全力回收。只影响 Go 堆（符号索引、缓存），不含 ctags 子进程。
+- 如果你的机器内存充裕、更在意 CPU，可以改回默认：删掉 `main()` 里这两行重新编译即可。
+
+### CPU 持续偏高的排查顺序
+
+1. **索引是否在反复重建**：`.ctags-lsp\index` 目录的时间戳反复刷新、或 Zed 日志里反复出现 `scan workspace start`，说明索引没有成功落盘（多半是权限/杀毒软件拦截写入），服务端每次启动都全量重扫。
+2. **`--jobs` 调低**：扩展目前固定不传 `--jobs`，默认 8 并发。低配机器可在扩展启动参数里加 `--jobs 2`（改 `src/ctags_lsp.rs` 的 `get_ctags_lsp_args` 后重编 wasm）。
+3. **排除无关语言**：只关心 Pascal 时，加 `--languages Pascal` 让 ctags 跳过其他语言的解析（同样是改 `get_ctags_lsp_args`）。
+4. **确认用的是磁盘索引模式**：`--index-mode memory`（上游默认行为）会把百万级符号常驻内存且每次启动全量重扫，CPU 和内存双高。当前版本默认 `disk`，除非显式传参否则不应该是这个原因。
+5. **ctags 进程残留**：任务管理器里看到多个 `ctags.exe` 常驻不退出属于异常（正常扫描完就退出），先杀掉 `ctags-lsp.exe` 和 `ctags.exe` 再重启 Zed。
+
+---
+
 ## 五、开发说明
 
 - **改 Rust 扩展**：`cargo component build --release --target wasm32-wasip1` 后需重新安装/拷贝 wasm，Zed 里才生效；格式检查 `cargo fmt -- --check`
