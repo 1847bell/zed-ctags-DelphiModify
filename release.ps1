@@ -40,6 +40,14 @@ $releaseName = "$repo $Version"
 $zipPath     = Join-Path $repoRoot "dist\ctags-zed-ctags-DelphiModify.zip"
 $zipName     = Split-Path $zipPath -Leaf
 
+# read the server binary's own build version (baked at Go build time via -X main.version)
+$serverVersion = "(unknown)"
+$distExe = Join-Path $repoRoot "dist\ctags\server\ctags-lsp.exe"
+if (-not $SkipWasmBuild -or (Test-Path $distExe)) {
+    $v = & $distExe --version 2>$null
+    if ($LASTEXITCODE -eq 0 -and $v) { $serverVersion = ($v -join " ") }
+}
+
 # --- 1. Build + assemble package (delegates to package.ps1) ---
 if ($DryRun) {
     Write-Host "[dry-run] would run: package.ps1 -SkipWasmBuild:$SkipWasmBuild"
@@ -87,12 +95,12 @@ function New-Release($Platform, $CreateUri, $CheckUri, $Headers) {
         $body = @{
             tag_name   = $Version
             name       = $releaseName
-            body       = "ctags-lsp build $Version. Contains: extension.toml + extension.wasm + server\ctags-lsp.exe + install.ps1"
+            body       = "ctags-lsp server build: $serverVersion`n`nContains: extension.toml + extension.wasm + server\ctags-lsp.exe + install.ps1"
             draft      = $false
             prerelease = $false
         } | ConvertTo-Json
         $release = Invoke-RestMethod -Method Post -Uri $CreateUri -Headers $Headers -Body $body -ContentType "application/json"
-        Write-Host "created release $Version (id=$($release.id))"
+        Write-Host "created release $Version (server build: $serverVersion)"
     }
 
     if ($DryRun) { return }
