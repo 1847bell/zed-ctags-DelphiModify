@@ -19,7 +19,7 @@
 | 部分 | 位置 | 说明 |
 |---|---|---|
 | 扩展本体（Rust → wasm） | `src/`、`extension.toml` | 非常小，只负责找到服务端二进制并启动它 |
-| LSP 服务器（Go，预编译 exe） | `server/ctags-lsp.exe` | **打过补丁的本地构建**，直接提交在仓库里 |
+| LSP 服务器（Go，预编译 exe） | Release 附件 | **打过补丁的本地构建**，以 Release 附件分发，不入库 |
 
 ---
 
@@ -29,9 +29,9 @@
 
 上游扩展首次启动时从 GitHub Releases 下载 ctags-lsp。本 fork：
 
-- 把编译好的 `ctags-lsp.exe` 直接放在 `server/` 目录并提交
+- 打过补丁的 `ctags-lsp.exe` 以 **Release 附件**形式分发（仓库不跟踪二进制），本地由 `package.ps1` 打包、`install.ps1` 安装
 - 扩展启动时检查 `ctags-lsp-project/ctags-lsp.exe` 是否存在，不存在则报安装错误（提示重跑安装脚本）
-- 好处：离线可用、版本完全可控、不依赖 GitHub 连通性
+- 好处：离线可用、版本完全可控、不依赖运行时 GitHub 连通性
 
 ### 2. Pascal/Delphi 支持
 
@@ -78,7 +78,14 @@
 
 ### 安装步骤
 
-仓库无 CI 后，手动打包/安装：
+**方式 A：下载 Release 包（推荐）**
+
+1. 到 Gitea（`git.1847bell.xyz/1847bell/zed-ctags-DelphiModify`）或 GitHub 镜像的 Releases 页，下载最新的 `ctags-zed-ctags-DelphiModify.zip`
+2. 解压后运行包内 `install.ps1`，重启 Zed
+
+**方式 B：从源码打包**
+
+仓库不跟踪 exe（通过 Release 附件分发），服务端二进制来自 `ctags-lsp-src` 仓库的构建产物。步骤：
 
 1. 构建扩展 wasm（需要 `rustup target add wasm32-wasip1` 和 `cargo install cargo-component --locked`）：
 
@@ -86,29 +93,21 @@
    cargo component build --release --target wasm32-wasip1
    ```
 
-2. 组装扩展目录：
-
-   ```
-   ctags/                          # 任意临时目录
-   ├── extension.toml              # 根目录复制
-   ├── extension.wasm              # target/wasm32-wasip1/release/zed_ctags*.wasm
-   └── server/
-       └── ctags-lsp.exe           # server/ctags-lsp.exe
-   ```
-
-3. 拷贝到 Zed 扩展目录：
+2. 把服务端 exe 放到 Zed work 目录（`package.ps1` 从这里取）：
 
    ```powershell
-   $dst = "$env:LOCALAPPDATA\Zed\extensions\installed\ctags"
-   New-Item -ItemType Directory -Force -Path $dst | Out-Null
-   Copy-Item extension.toml,extension.wasm $dst
-
    $work = "$env:LOCALAPPDATA\Zed\extensions\work\ctags\ctags-lsp-project"
    New-Item -ItemType Directory -Force -Path $work | Out-Null
-   Copy-Item server\ctags-lsp.exe $work
+   Copy-Item <ctags-lsp构建产物>\ctags-lsp.exe $work
    ```
 
-4. 重启 Zed。
+3. 运行打包脚本（构建 wasm + 组装 `dist/ctags/` + 生成 `install.ps1` + 打 zip）：
+
+   ```powershell
+   ./package.ps1
+   ```
+
+4. 安装：运行 `dist\ctags\install.ps1`，重启 Zed；或把 zip 传到 Release 供其他机器使用
 
 ### 启用
 
@@ -178,8 +177,9 @@
   go build -ldflags "-X main.version=<本地版本号>" -o ctags-lsp.exe .
   ```
 
-  然后把新 exe 覆盖 `server/ctags-lsp.exe` 和 Zed work 目录两处。**不要**用上游 release 的二进制覆盖——必须是本补丁版
-- 旧版本服务端备份以 `server/ctags-lsp.pre-*.exe` 命名保留，不再需要时可删
+  然后把新 exe 覆盖 Zed work 目录（`%LOCALAPPDATA%\Zed\extensions\work\ctags\ctags-lsp-project\ctags-lsp.exe`）。**不要**用上游 release 的二进制覆盖——必须是本补丁版
+- exe 不再提交进本仓库（见「安装步骤」）。发新版时：跑 `./package.ps1` 打 zip → 打 tag（如 `v0.1.0-fix3`）→ 推 tag → 在 Gitea 和 GitHub 的 Release 上传 zip 附件
+- 旧版本服务端备份可在 `ctags-lsp-src` 目录里以 `.exe` 形式保留，不再需要时可删
 
 ---
 
