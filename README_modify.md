@@ -178,14 +178,16 @@
   ```
 
   然后把新 exe 覆盖 Zed work 目录（`%LOCALAPPDATA%\Zed\extensions\work\ctags\ctags-lsp-project\ctags-lsp.exe`）。**不要**用上游 release 的二进制覆盖——必须是本补丁版
-- exe 不再提交进本仓库（见「安装步骤」）。发新版一条命令（PowerShell）：
+- exe 不再提交进本仓库（见「安装步骤」）。发新版一条命令（PowerShell），版本号全自动推导，无需手动指定：
 
   ```powershell
-  ./release.ps1 v0.1.0-fix3          # 打包 + 打 tag + 推送 + Gitea/GitHub 双平台建 Release 传 zip
-  ./release.ps1 vX.Y.Z -SkipWasmBuild # 复用已有 wasm，跳过构建
+  ./release.ps1                    # 自动版本：v<extension.toml版本>-<服务端构建后缀>
+  ./release.ps1 v0.2.0-xxx         # 也可手动指定版本号
+  ./release.ps1 -SkipWasmBuild     # 复用已有 wasm，跳过构建
+  ./release.ps1 -DryRun            # 预演，不实际执行
   ```
 
-  脚本从仓库根目录 `.release-env`（已 gitignore）读取两个 token：`GITEA_TOKEN=`（Gitea 个人访问令牌，仓库写权限）、`GIT_TOKEN=`（GitHub fine-grained PAT，仅此仓库 Contents 读写）。可加 `-DryRun` 预演。脚本幂等：tag 已存在会报错提示换版本号；远端已有同名 Release 则只补传附件
+  版本推导规则：读 `extension.toml` 的 `version`（如 `0.1.0`）+ 打包内服务端 exe 的 `--version` 后缀（如 `memory-opt-20260905-fix3` → `fix3`），拼成 `v0.1.0-fix3`。脚本幂等：tag 已在当前提交上则复用；tag 在其他提交上会拒绝；远端已有同名 Release 则只补传附件
 - 旧版本服务端备份可在 `ctags-lsp-src` 目录里以 `.exe` 形式保留，不再需要时可删
 
 ---
