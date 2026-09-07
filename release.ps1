@@ -2,17 +2,19 @@
 # on BOTH Gitea (git.1847bell.xyz, source of truth) and GitHub (push-mirror).
 #
 # Usage:
-#   pwsh ./release.ps1 v0.1.0-fix3
-#   pwsh ./release.ps1 v0.1.0-fix3 -SkipWasmBuild     # reuse existing wasm
-#   pwsh ./release.ps1 v0.1.0-fix3 -DryRun            # show what would run, do nothing
+#   pwsh ./release.ps1                # version auto-derived: v<extension.toml>-<server build suffix>
+#                                     #   e.g. extension 0.1.0 + server memory-opt-20260905-fix3 -> v0.1.0-fix3
+#   pwsh ./release.ps1 v0.2.0-fix4    # explicit version override
+#   pwsh ./release.ps1 -SkipWasmBuild # reuse existing wasm
+#   pwsh ./release.ps1 -DryRun        # show what would run, do nothing
 #
 # Tokens come from .release-env in the repo root (gitignored):
 #   GITEA_TOKEN=<token>      Gitea personal access token (repo write)
 #   GIT_TOKEN=<token>        GitHub fine-grained PAT (Contents: read/write, this repo only)
 
 param(
-    [Parameter(Mandatory = $true, Position = 0)]
-    [string]$Version,                 # tag name, e.g. v0.1.0-fix3
+    [Parameter(Position = 0)]
+    [string]$Version,                 # optional; auto-derived when omitted (see usage above)
     [switch]$SkipWasmBuild,
     [switch]$DryRun
 )
@@ -40,14 +42,6 @@ $releaseName = "$repo $Version"
 $zipPath     = Join-Path $repoRoot "dist\ctags-zed-ctags-DelphiModify.zip"
 $zipName     = Split-Path $zipPath -Leaf
 
-# read the server binary's own build version (baked at Go build time via -X main.version)
-$serverVersion = "(unknown)"
-$distExe = Join-Path $repoRoot "dist\ctags\server\ctags-lsp.exe"
-if (-not $SkipWasmBuild -or (Test-Path $distExe)) {
-    $v = & $distExe --version 2>$null
-    if ($LASTEXITCODE -eq 0 -and $v) { $serverVersion = ($v -join " ") }
-}
-
 # --- 1. Build + assemble package (delegates to package.ps1) ---
 if ($DryRun) {
     Write-Host "[dry-run] would run: package.ps1 -SkipWasmBuild:$SkipWasmBuild"
@@ -59,20 +53,57 @@ if ($DryRun) {
     if (-not (Test-Path $zipPath)) { throw "zip missing: $zipPath" }
 }
 
-# --- 2. Tag + push (Gitea is the remote; GitHub gets the tag via push-mirror) ---
-if (git -C $repoRoot rev-parse -q --verify "refs/tags/$Version" 2>$null) {
-    throw "tag $Version already exists locally — pick a new version"
+# --- 2. Derive versions ---
+# extension version comes from extension.toml; server build version from the exe
+# (baked at Go build time via -X main.version).
+$extVersion = $null
+foreach ($line in Get-Content (Join-Path $repoRoot "extension.toml")) {
+    if ($line -match '^\s*version\s*=\s*"([^"]+)"') { $extVersion = $Matches[1]; break }
 }
-if ($DryRun) {
-    Write-Host "[dry-run] would run: git tag $Version; git push fork $Version"
+if (-not $extVersion) { throw "could not read version from extension.toml" }
+
+$serverVersion = "(unknown)"
+$distExe = Join-Path $repoRoot "dist\ctags\server\ctags-lsp.exe"
+$v = & $distExe --version 2>$null
+if ($LASTEXITCODE -eq 0 -and $v) { $serverVersion = ($v -join " ") }
+# server build "memory-opt-20260905-fix3" -> suffix "fix3"; fall back to full build id
+$serverSuffix = ($serverVersion -split '\s+')[-1]
+if ($serverSuffix -match '-(fix\d+|v\d+[^-]*)$') { $serverSuffix = $Matches[1] }
+
+if (-not $Version) {
+    $Version = "v$extVersion-$serverSuffix"
+}
+$releaseName = "$repo $Version"
+
+Write-Host ""
+Write-Host "extension : $extVersion"
+Write-Host "server    : $serverVersion"
+Write-Host "tag       : $Version"
+Write-Host ""
+
+# --- 3. Tag + push (Gitea is the remote; GitHub gets the tag via push-mirror) ---
+# If the tag already exists but is attached to HEAD (a previous release of the
+# same content), it is reused instead of erroring.
+$tagExists = git -C $repoRoot rev-parse -q --verify "refs/tags/$Version" 2>$null
+$headCommit = git -C $repoRoot rev-parse HEAD
+if ($tagExists) {
+    $tagCommit = git -C $repoRoot rev-parse "$Version^{commit}"
+    if ($tagCommit -ne $headCommit) {
+        throw "tag $Version exists at a different commit ($tagCommit) — pick a new version"
+    }
+    Write-Host "tag $Version already on HEAD — reusing it (existing Release will get the asset attached)"
 } else {
-    git -C $repoRoot tag $Version
-    if ($LASTEXITCODE -ne 0) { throw "git tag failed" }
-    git -C $repoRoot push fork $Version
-    if ($LASTEXITCODE -ne 0) { throw "git push failed — delete the local tag with: git tag -d $Version" }
+    if ($DryRun) {
+        Write-Host "[dry-run] would run: git tag $Version; git push fork $Version"
+    } else {
+        git -C $repoRoot tag $Version
+        if ($LASTEXITCODE -ne 0) { throw "git tag failed" }
+        git -C $repoRoot push fork $Version
+        if ($LASTEXITCODE -ne 0) { throw "git push failed — delete the local tag with: git tag -d $Version" }
+    }
 }
 
-# --- 3. Create Release + upload zip asset ---
+# --- 4. Create Release + upload zip asset ---
 # curl.exe (Schannel, ships with Windows) does the multipart uploads;
 # Invoke-RestMethod handles the JSON create calls.
 function New-Release($Platform, $CreateUri, $CheckUri, $Headers) {
