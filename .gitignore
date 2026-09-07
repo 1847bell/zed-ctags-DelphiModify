@@ -3,3 +3,4 @@ extension.wasm
 server/*.pre-*.exe
 .ctags-lsp/
 server/*.exe
+dist/
