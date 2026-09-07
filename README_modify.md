@@ -178,7 +178,14 @@
   ```
 
   然后把新 exe 覆盖 Zed work 目录（`%LOCALAPPDATA%\Zed\extensions\work\ctags\ctags-lsp-project\ctags-lsp.exe`）。**不要**用上游 release 的二进制覆盖——必须是本补丁版
-- exe 不再提交进本仓库（见「安装步骤」）。发新版时：跑 `./package.ps1` 打 zip → 打 tag（如 `v0.1.0-fix3`）→ 推 tag → 在 Gitea 和 GitHub 的 Release 上传 zip 附件
+- exe 不再提交进本仓库（见「安装步骤」）。发新版一条命令（PowerShell）：
+
+  ```powershell
+  ./release.ps1 v0.1.0-fix3          # 打包 + 打 tag + 推送 + Gitea/GitHub 双平台建 Release 传 zip
+  ./release.ps1 vX.Y.Z -SkipWasmBuild # 复用已有 wasm，跳过构建
+  ```
+
+  脚本从仓库根目录 `.release-env`（已 gitignore）读取两个 token：`GITEA_TOKEN=`（Gitea 个人访问令牌，仓库写权限）、`GIT_TOKEN=`（GitHub fine-grained PAT，仅此仓库 Contents 读写）。可加 `-DryRun` 预演。脚本幂等：tag 已存在会报错提示换版本号；远端已有同名 Release 则只补传附件
 - 旧版本服务端备份可在 `ctags-lsp-src` 目录里以 `.exe` 形式保留，不再需要时可删
 
 ---

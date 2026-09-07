@@ -4,3 +4,5 @@ server/*.pre-*.exe
 .ctags-lsp/
 server/*.exe
 dist/
+.release-env
+
