@@ -82,6 +82,7 @@
 
 1. 到 Gitea（`git.1847bell.xyz/1847bell/zed-ctags-DelphiModify`）或 GitHub 镜像的 Releases 页，下载最新的 `ctags-zed-ctags-DelphiModify.zip`
 2. 解压后运行包内 `install.ps1`，重启 Zed
+3. 卸载：运行包内 `uninstall.ps1`（`-RemoveSettings` 可顺带清掉 `settings.json` 里的 Pascal 配置；建议先关 Zed）
 
 **方式 B：从源码打包**
 
@@ -96,7 +97,7 @@
 2. 把服务端 exe 放到 Zed work 目录（`package.ps1` 从这里取）：
 
    ```powershell
-   $work = "$env:LOCALAPPDATA\Zed\extensions\work\ctags\ctags-lsp-project"
+   $work = "$env:LOCALAPPDATA\Zed\extensions\work\pascal-ctags\ctags-lsp-project"
    New-Item -ItemType Directory -Force -Path $work | Out-Null
    Copy-Item <ctags-lsp构建产物>\ctags-lsp.exe $work
    ```
@@ -108,6 +109,7 @@
    ```
 
 4. 安装：运行 `dist\ctags\install.ps1`，重启 Zed；或把 zip 传到 Release 供其他机器使用
+5. 卸载：运行 `dist\ctags\uninstall.ps1`（加 `-RemoveSettings` 可顺带清掉 `settings.json` 里的 Pascal 配置；建议先关 Zed 再卸载）
 
 ### 启用
 
@@ -117,12 +119,12 @@
 "languages": {
   "Pascal": {
     // "!omnipascal" 表示显式停用 omnipascal；若无需共存可去掉
-    "language_servers": ["ctags-lsp", "!omnipascal"]
+    "language_servers": ["pascal-ctags-lsp", "!omnipascal"]
   }
 }
 ```
 
-验证：`zed: open log` 里应能看到 ctags-lsp 启动记录；状态栏/语言服务器菜单显示 Universal Ctags LSP。
+验证：`zed: open log` 里应能看到 ctags-lsp 启动记录；状态栏/语言服务器菜单显示 Pascal Ctags LSP。
 
 ---
 
@@ -177,7 +179,7 @@
   go build -ldflags "-X main.version=<本地版本号>" -o ctags-lsp.exe .
   ```
 
-  然后把新 exe 覆盖 Zed work 目录（`%LOCALAPPDATA%\Zed\extensions\work\ctags\ctags-lsp-project\ctags-lsp.exe`）。**不要**用上游 release 的二进制覆盖——必须是本补丁版
+  然后把新 exe 覆盖 Zed work 目录（`%LOCALAPPDATA%\Zed\extensions\work\pascal-ctags\ctags-lsp-project\ctags-lsp.exe`）。**不要**用上游 release 的二进制覆盖——必须是本补丁版
 - exe 不再提交进本仓库（见「安装步骤」）。发新版一条命令（PowerShell），版本号全自动推导，无需手动指定：
 
   ```powershell

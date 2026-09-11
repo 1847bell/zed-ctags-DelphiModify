@@ -1,11 +1,11 @@
-id = "ctags"
-name = "Universal Ctags LSP support"
-version = "0.1.0"
+id = "pascal-ctags"
+name = "Pascal Ctags LSP Support"
+version = "0.1.1"
 schema_version = 1
-authors = ["Mateusz Mazur <mateusz.mazur@hey.com>"]
-description = "Add Universal Ctags support to the Zed editor"
+authors = ["Alex Niu <1847bell@gmail.com>"]
+description = "Add Pascal ctags support to the Zed"
 repository = "https://github.com/mazurel/zed-ctags"
 
-[language_servers.ctags-lsp]
-name = "Universal Ctags LSP"
+[language_servers.pascal-ctags-lsp]
+name = "Pascal Ctags LSP"
 languages = ["C", "C++", "Python", "Pascal"]
